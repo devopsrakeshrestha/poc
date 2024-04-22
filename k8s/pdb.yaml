@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: scraping-service-pdb
+  namespace: poc
+spec:
+  selector:
+    matchLabels:
+      app: scraping-service
+  maxUnavailable: 1
