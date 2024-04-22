@@ -14,7 +14,28 @@ spec:
     spec:
       containers:
       - name: scraper
-        image: scraping-service:latest
+        image: devopsrakeshrestha/crawl:POC-01
+        env:
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: access-key
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: secret-key
+          - name: AWS_REGION
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: aws-region
+          - name: BUCKET_NAME
+            valueFrom:
+              secretKeyRef:
+                name: aws-credentials
+                key: bucket_name
         ports:
         - containerPort: 8080
         resources:
@@ -59,4 +80,6 @@ spec:
             topologyKey: "kubernetes.io/hostname"
       nodeSelector:
         yourNodeLabelKey: scraping-server
+      imagePullSecrets:
+        - name: acr-auth
 
