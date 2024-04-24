@@ -1,8 +1,8 @@
+import time
+import redis
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask, jsonify
-import boto3
-import os
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -15,10 +15,26 @@ bucket_name = 'poc-deleteme'  # Replace 'poc-deleteme' with your actual bucket n
 checkpoint_key = 'crawler_checkpoint.txt'  # Key for storing checkpoint in S3
 processed_key = 'processed_items.txt'  # Key for storing processed items in S3
 
+# Initialize Redis client
+redis_host = 'redis-service'  # Redis service hostname in Kubernetes
+redis_port = 6379  # Redis default port
+redis_client = redis.StrictRedis(host=redis_host, port=redis_port, decode_responses=True)
+
+# Define crawling job lock key
+lock_key = 'crawling_job_lock'
+
 @app.route('/healthz')
 def health_check():
     # Perform a simple health check
     return jsonify({"status": "ok"})
+
+def acquire_lock():
+    # Attempt to acquire the lock
+    return redis_client.set(lock_key, 'locked', ex=10, nx=True)  # Lock expires in 10 seconds
+
+def release_lock():
+    # Release the lock
+    redis_client.delete(lock_key)
 
 def load_checkpoint():
     try:
@@ -54,55 +70,62 @@ def save_processed_item(item):
         print(f"Failed to save processed item to S3: {str(e)}")
 
 def crawl_wikipedia():
-    # Load checkpoint and processed items
-    checkpoint = load_checkpoint()
-    processed_items = load_processed_items()
+    if acquire_lock():
+        try:
+            # Load checkpoint and processed items
+            checkpoint = load_checkpoint()
+            processed_items = load_processed_items()
 
-    if checkpoint is not None:
-        # Resume from the checkpoint
-        print("Resuming crawler from checkpoint:", checkpoint)
-        page = checkpoint
-    else:
-        # Start fresh crawling
-        print("Starting fresh crawling...")
-        page = 1
-
-    # Extract data from Wikipedia and save it to S3
-    base_url = "https://en.wikipedia.org/wiki/List_of_best-selling_books"
-    total_records = 0
-    data = []
-    while total_records < 10:
-        url = f"{base_url}?page={page}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            table = soup.find("table", class_="wikitable")
-            if table:
-                rows = table.find_all("tr")[1:]
-                for row in rows:
-                    columns = row.find_all("td")
-                    if len(columns) >= 4:
-                        title = columns[0].text.strip()
-                        author = columns[1].text.strip()
-                        date = columns[3].text.strip()
-                        item = f"{title}, {author}, {date}"
-                        if item not in processed_items:
-                            data.append({"Title": title, "Author": author, "Publication Date": date})
-                            total_records += 1
-                            save_processed_item(item)
-                            if total_records >= 10:
-                                break
+            if checkpoint is not None:
+                # Resume from the checkpoint
+                print("Resuming crawler from checkpoint:", checkpoint)
+                page = checkpoint
             else:
-                print(f"Table not found on page {page}.")
-                break
-            
-            page += 1
-        else:
-            print(f"Failed to fetch data from Wikipedia. Status Code: {response.status_code}")
-            break
+                # Start fresh crawling
+                print("Starting fresh crawling...")
+                page = 1
 
-    # Save data to S3
-    save_to_s3(data)
+            # Extract data from Wikipedia and save it to S3
+            base_url = "https://en.wikipedia.org/wiki/List_of_best-selling_books"
+            total_records = 0
+            data = []
+            while total_records < 10:
+                url = f"{base_url}?page={page}"
+                response = requests.get(url)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    table = soup.find("table", class_="wikitable")
+                    if table:
+                        rows = table.find_all("tr")[1:]
+                        for row in rows:
+                            columns = row.find_all("td")
+                            if len(columns) >= 4:
+                                title = columns[0].text.strip()
+                                author = columns[1].text.strip()
+                                date = columns[3].text.strip()
+                                item = f"{title}, {author}, {date}"
+                                if item not in processed_items:
+                                    data.append({"Title": title, "Author": author, "Publication Date": date})
+                                    total_records += 1
+                                    save_processed_item(item)
+                                    if total_records >= 10:
+                                        break
+                    else:
+                        print(f"Table not found on page {page}.")
+                        break
+                    
+                    page += 1
+                else:
+                    print(f"Failed to fetch data from Wikipedia. Status Code: {response.status_code}")
+                    break
+
+            # Save data to S3
+            save_to_s3(data)
+            save_checkpoint(page)
+        finally:
+            release_lock()
+    else:
+        print("Another container is already processing the crawling job.")
 
 def save_to_s3(data):
     if data:
