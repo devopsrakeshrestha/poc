@@ -17,7 +17,7 @@ checkpoint_key = 'crawler_checkpoint.txt'  # Key for storing checkpoint in S3
 processed_key = 'processed_items.txt'  # Key for storing processed items in S3
 
 # Initialize Redis client
-redis_host = 'redis-19136.c52.us-east-1-4.ec2.redns.redis-cloud.com'  # Redis service hostname in Kubernetes
+redis_host = 'localhost'  # Redis service hostname in Kubernetes
 redis_port = 19136  # Redis default port
 redis_password = 'IPtVDK5JYNsaqpKBS8qbLuShTYoVozEF'  # Replace 'your_redis_password' with the actual Redis password
 redis_client = redis.StrictRedis(host=redis_host, port=redis_port, password=redis_password, decode_responses=True)
