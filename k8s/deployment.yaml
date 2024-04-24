@@ -69,15 +69,6 @@ spec:
                 values:
                 - web-crawler
             topologyKey: "kubernetes.io/hostname"
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-              - key: app
-                operator: In
-                values:
-                - web-crawler
-            topologyKey: "kubernetes.io/hostname"
       nodeSelector:
         yourNodeLabelKey: scraping-server
       imagePullSecrets:
