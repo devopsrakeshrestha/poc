@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: scraping-service
 spec:
-  replicas: 1  # Adjust based on resource availability and high availability requirements
+  replicas: 1
   selector:
     matchLabels:
       app: scraping-service
@@ -40,11 +40,11 @@ spec:
         - containerPort: 8080
         resources:
           requests:
-            cpu: "100m"  # Define CPU request based on pod's resource needs
-            memory: "64Mi"  # Define memory request based on pod's resource needs
+            cpu: "100m"
+            memory: "64Mi"
           limits:
-            cpu: "200m"  # Define CPU limit based on pod's maximum resource usage
-            memory: "1000Mi"  # Define memory limit based on pod's maximum resource usage
+            cpu: "200m"
+            memory: "1000Mi"
         readinessProbe:
           httpGet:
             path: /health
@@ -65,7 +65,7 @@ spec:
             port: 8080
           initialDelaySeconds: 15       
           periodSeconds: 10             
-          failureThreshold: 30          #
+          failureThreshold: 30
       affinity:
         podAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -80,4 +80,7 @@ spec:
         yourNodeLabelKey: scraping-server
       imagePullSecrets:
         - name: acr-auth
-
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
