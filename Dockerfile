@@ -15,7 +15,7 @@ COPY scrape_wikipedia.py .
 
 
 # Install necessary dependencies
-RUN pip install Flask requests beautifulsoup4 boto3
+RUN pip install Flask requests beautifulsoup4 boto3 redis
 
 # Install the AWS CLI for uploading files to S3
 RUN apt-get update && \
