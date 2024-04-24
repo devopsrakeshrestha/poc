@@ -13,6 +13,7 @@ s3 = boto3.client('s3')
 # Hardcoded S3 bucket name
 bucket_name = 'poc-deleteme'  # Replace 'poc-deleteme' with your actual bucket name
 checkpoint_key = 'crawler_checkpoint.txt'  # Key for storing checkpoint in S3
+processed_key = 'processed_items.txt'  # Key for storing processed items in S3
 
 @app.route('/healthz')
 def health_check():
@@ -35,9 +36,28 @@ def save_checkpoint(checkpoint):
     except Exception as e:
         print(f"Failed to save checkpoint to S3: {str(e)}")
 
+def load_processed_items():
+    try:
+        response = s3.get_object(Bucket=bucket_name, Key=processed_key)
+        processed_items = response['Body'].read().decode('utf-8').split('\n')
+        return set(processed_items)
+    except s3.exceptions.NoSuchKey:
+        return set()
+    except Exception as e:
+        print(f"Failed to load processed items from S3: {str(e)}")
+        return set()
+
+def save_processed_item(item):
+    try:
+        s3.put_object(Body=item, Bucket=bucket_name, Key=processed_key, ContentType='text/plain')
+    except Exception as e:
+        print(f"Failed to save processed item to S3: {str(e)}")
+
 def crawl_wikipedia():
-    # Load checkpoint
+    # Load checkpoint and processed items
     checkpoint = load_checkpoint()
+    processed_items = load_processed_items()
+
     if checkpoint is not None:
         # Resume from the checkpoint
         print("Resuming crawler from checkpoint:", checkpoint)
@@ -65,14 +85,17 @@ def crawl_wikipedia():
                         title = columns[0].text.strip()
                         author = columns[1].text.strip()
                         date = columns[3].text.strip()
-                        data.append({"Title": title, "Author": author, "Publication Date": date})
-                total_records += len(rows)
+                        item = f"{title}, {author}, {date}"
+                        if item not in processed_items:
+                            data.append({"Title": title, "Author": author, "Publication Date": date})
+                            total_records += 1
+                            save_processed_item(item)
+                            if total_records >= 10:
+                                break
             else:
                 print(f"Table not found on page {page}.")
                 break
             
-            # Save checkpoint before crawling next page
-            save_checkpoint(page)
             page += 1
         else:
             print(f"Failed to fetch data from Wikipedia. Status Code: {response.status_code}")
